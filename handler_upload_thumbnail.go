@@ -3,7 +3,11 @@ package main
 import (
 	"fmt"
 	"io"
+	"log"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
 	"github.com/google/uuid"
@@ -42,11 +46,11 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	defer file.Close()
 
 	contentType := header.Header.Get("Content-Type")
-	imageData, err := io.ReadAll(file)
-	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Unable to read file", err)
-		return
-	}
+	// imageData, err := io.ReadAll(file)
+	// if err != nil {
+	// 	respondWithError(w, http.StatusBadRequest, "Unable to read file", err)
+	// 	return
+	// }
 	video, err := cfg.db.GetVideo(videoID)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Invalid ID", err)
@@ -56,9 +60,25 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		respondWithError(w, http.StatusUnauthorized, "Invalid user", nil)
 		return
 	}
-	thumb := thumbnail{data: imageData, mediaType: contentType}
-	videoThumbnails[video.ID] = thumb
-	thumbUrl := fmt.Sprintf("http://localhost:%s/api/thumbnails/%s", cfg.port, videoID)
+	content, ext, found := strings.Cut(contentType, "/")
+	if !found || content != "image" {
+		respondWithError(w, http.StatusBadRequest, "Invalid Content-Type", nil)
+		return
+	}
+	thumbFilename := videoID.String() + "." + ext
+	thumbPath := filepath.Join(cfg.assetsRoot, thumbFilename)
+	thumbFile, err := os.Create(thumbPath)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Unable to save thumbnail", err)
+		return
+	}
+	size, err := io.Copy(thumbFile, file)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Unable to save thumbnail", err)
+		return
+	}
+	log.Printf("Created thumbnail %s %d bytes", thumbPath, size)
+	thumbUrl := fmt.Sprintf("http://localhost:%s/assets/%s", cfg.port, thumbFilename)
 	video.ThumbnailURL = &thumbUrl
 	if err := cfg.db.UpdateVideo(video); err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Unable to save thumbnail", err)
