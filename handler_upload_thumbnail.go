@@ -1,9 +1,12 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"log"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -14,6 +17,7 @@ import (
 )
 
 func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Request) {
+	validMediaTypes := map[string]struct{}{"image/jpeg": struct{}{}, "image/png": struct{}{}}
 	videoIDString := r.PathValue("videoID")
 	videoID, err := uuid.Parse(videoIDString)
 	if err != nil {
@@ -45,7 +49,6 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	}
 	defer file.Close()
 
-	contentType := header.Header.Get("Content-Type")
 	// imageData, err := io.ReadAll(file)
 	// if err != nil {
 	// 	respondWithError(w, http.StatusBadRequest, "Unable to read file", err)
@@ -60,12 +63,22 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		respondWithError(w, http.StatusUnauthorized, "Invalid user", nil)
 		return
 	}
-	content, ext, found := strings.Cut(contentType, "/")
-	if !found || content != "image" {
+
+	mediaType, _, err := mime.ParseMediaType(header.Header.Get("Content-Type"))
+	_, ok := validMediaTypes[mediaType]
+	if err != nil || !ok {
+		respondWithError(w, http.StatusBadRequest, "Invalid Content-Type", err)
+		return
+	}
+
+	_, ext, found := strings.Cut(mediaType, "/")
+	if !found {
 		respondWithError(w, http.StatusBadRequest, "Invalid Content-Type", nil)
 		return
 	}
-	thumbFilename := videoID.String() + "." + ext
+	thumbIdBytes := make([]byte, 32)
+	rand.Read(thumbIdBytes)
+	thumbFilename := base64.RawURLEncoding.EncodeToString(thumbIdBytes) + "." + ext
 	thumbPath := filepath.Join(cfg.assetsRoot, thumbFilename)
 	thumbFile, err := os.Create(thumbPath)
 	if err != nil {
