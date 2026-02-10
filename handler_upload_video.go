@@ -205,7 +205,7 @@ func getVideoAspectRatio(filePath string) (string, error) {
 	switch {
 	case width == 16*height/9:
 		return "16:9", nil
-	case height == 16*height/9:
+	case height == 16*width/9:
 		return "9:16", nil
 	default:
 		return "other", nil
