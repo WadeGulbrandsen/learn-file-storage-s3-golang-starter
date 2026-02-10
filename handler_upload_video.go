@@ -143,19 +143,13 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Update the video URL in the database
-	videoURL := fmt.Sprintf("%s,%s", cfg.s3Bucket, videoKey)
+	videoURL := fmt.Sprintf("https://%s/%s", cfg.s3CfDistribution, videoKey)
 	video.VideoURL = &videoURL
 	if err := cfg.db.UpdateVideo(video); err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Unable to save video", err)
 		return
 	}
 
-	// Get video with presigned URL
-	video, err = cfg.dbVideoToSignedVideo(video)
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Unable to get video URL", err)
-		return
-	}
 	respondWithJSON(w, http.StatusOK, video)
 }
 
